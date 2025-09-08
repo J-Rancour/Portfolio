@@ -1,0 +1,10 @@
+**/__pycache__
+/__pycache__
+*.csv
+*.xlsx
+/settings.json
+service_account.json
+.env
+/csv
+*.pyc
+*.venv
