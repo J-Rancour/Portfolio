@@ -8,3 +8,4 @@ service_account.json
 /csv
 *.pyc
 *.venv
+venv/
