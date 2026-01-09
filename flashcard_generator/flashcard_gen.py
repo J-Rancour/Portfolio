@@ -171,7 +171,7 @@ def next():
     entry.delete(0, END)
     hinter = ""
     hint_count = 0
-    print("New word index is", random_word)
+    #print("New word index is", random_word)
     #native_word.config(text=words_and_letters[random_word][1])
     #root.after(2000, clear_label)
 def answer():
@@ -225,7 +225,8 @@ def next_vocab_list():
     # print("Current vocab list index after changing vocab is", current_index)
     next()
     
-    
+def show_vocab():
+    show_vocab_label.config(text = "test")
     
     
 foreign_word = Label(root, text="", font=("Helvetica", 36))
@@ -255,13 +256,18 @@ hint_button.grid(row=0, column=2, padx=10)
 next_vocab_button = Button(button_frame, text="Next Vocab List", command = next_vocab_list)
 next_vocab_button.grid(row=1, column= 0, padx=20)
 
-show_vocab_button = Button(button_frame, text = "Show Vocab List")
+show_vocab_button = Button(button_frame, text = "Show Vocab List", command = show_vocab)
 show_vocab_button.grid(row=1, column=2, padx = 20)
 
-vocab_list_label = Label(root, text="", font=("Helvetica", 20))
+vocab_list_label = Label(root, text=vocab_list_labels[current_index], font=("Helvetica", 20))
+vocab_list_label.pack(pady=5)
 
-hint_label = Label(root, text=vocab_list_labels[current_index], font=("Helvetica", 20))
+hint_label = Label(root, text="", font=("Helvetica", 20))
 hint_label.pack(pady=5)
+
+show_vocab_label = Label(root, text = "", font=("Helvetica", 15))
+show_vocab_label.pack(side="right", anchor = "n", padx = 40, pady = 30)
+
 
 # troubleshoot_label = Label(root, text = print(str(hint_count)), font=("Helvetica", 20))
 # troubleshoot_label.pack(pady=5)
