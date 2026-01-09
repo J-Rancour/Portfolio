@@ -4,10 +4,10 @@ import time
 root = Tk()
 root.title("Japanese Flashcard Generator")
 #root.iconbitmap("japanese_flag.ico")
-root.geometry("550x410")
+root.geometry("550x500")
 
 #replace word or letters with ones you would like to learn
-words_and_letters = [
+hiragana_letters = [
     (("あ"), ("a")),
     (("い"), ("i")),
     (("う"), ("u")),
@@ -149,36 +149,85 @@ words_section_2 = [
 
 ]
 
-count = len(words_and_letters)
+#keep adding to list as more term lists are added. will automate this in the future through OCR scans
+overall_vocab_list = [hiragana_letters, words_section_1]
+current_index = 0
+current_vocab_list = overall_vocab_list[current_index]
+count = len(overall_vocab_list[current_index])
+# print("Initial count is", count)
+# print("Initial index is", current_index)
 def clear_label():
     hint_label.config(text="")
     answer_label.config(text="")
 
 def next():
     global random_word
+    global hinter
+    global hint_count
     random_word = random.randint(0, count -1)
-    foreign_word.config(text=words_and_letters[random_word][0])
+    foreign_word.config(text=current_vocab_list[random_word][0])
     hint_label.config(text="")
     answer_label.config(text="")
     entry.delete(0, END)
-    
+    hinter = ""
+    hint_count = 0
+    print("New word index is", random_word)
     #native_word.config(text=words_and_letters[random_word][1])
     #root.after(2000, clear_label)
 def answer():
-    if entry.get() == words_and_letters[random_word][1]:
-        answer_label.config(text=f"Correct! {words_and_letters[random_word][1]} is {words_and_letters[random_word][0]}")
+    if entry.get() == current_vocab_list[random_word][1]:
+        answer_label.config(text=f"Correct! {current_vocab_list[random_word][1]} is {current_vocab_list[random_word][0]}")
     else:
-        answer_label.config(text=f"Incorrect! {entry.get().lower()} is not {words_and_letters[random_word][0]}")
+        answer_label.config(text=f"Incorrect! {entry.get().lower()} is not {current_vocab_list[random_word][0]}")
     
-
+hinter = ""
+hint_count = 0
 def hint():
-    hinter = ""
-    hint_count = 0
-    if hint_count <= len(words_and_letters[random_word][1]):
-        hinter = hinter + words_and_letters[random_word][1][hint_count]
+    global hinter
+    global hint_count
+    if hint_count <= len(current_vocab_list[random_word][1]):
+        hinter = hinter + current_vocab_list[random_word][1][hint_count]
         hint_label.config(text=hinter)
         hint_count += 1
+    # print("Current hint count with hint button is", hint_count)
+    # print("Current hint string with hint button is", hinter)
 
+
+vocab_list_labels = ['Hiragana Characters',
+    'Section 1 Vocab']#,
+    # 'Numbers',
+    # 'Time']
+
+def next_vocab_list():
+    global current_index
+    global current_vocab_list
+    global hinter
+    global hint_count
+    global count
+    if current_index < len(vocab_list_labels)-1:
+        current_index += 1
+    else:
+        current_index = 0
+    current_vocab_list = overall_vocab_list[current_index]
+    random_word = random.randint(0, count -1)
+    foreign_word.config(text=current_vocab_list[random_word][0])
+    hint_label.config(text="")
+    answer_label.config(text="")
+    vocab_list_label.config(text=vocab_list_labels[current_index])
+
+    entry.delete(0, END)
+    hinter = ""
+    hint_count = 0
+    count = len(overall_vocab_list[current_index])
+    # print("Hint string after changing vocab is", hinter)
+    # print("Hint count after changing vocab is", hint_count)
+    # print("Vocabl list length after changing vocab is", count)
+    # print("Current vocab list index after changing vocab is", current_index)
+    next()
+    
+    
+    
+    
 foreign_word = Label(root, text="", font=("Helvetica", 36))
 foreign_word.pack(pady=20)
 
@@ -195,15 +244,23 @@ button_frame = Frame(root)
 button_frame.pack(pady=20)
 
 answer_button = Button(button_frame, text="Answer", command = answer)
-answer_button.grid(row=0, column=0, padx=20)
+answer_button.grid(row=0, column=0, padx=10)
 
 next_button = Button(button_frame, text="Next", command = next)
 next_button.grid(row=0, column=1)
 
 hint_button = Button(button_frame, text="Hint", command = hint)
-hint_button.grid(row=0, column=2, padx=20)
+hint_button.grid(row=0, column=2, padx=10)
 
-hint_label = Label(root, text="", font=("Helvetica", 20))
+next_vocab_button = Button(button_frame, text="Next Vocab List", command = next_vocab_list)
+next_vocab_button.grid(row=1, column= 0, padx=20)
+
+show_vocab_button = Button(button_frame, text = "Show Vocab List")
+show_vocab_button.grid(row=1, column=2, padx = 20)
+
+vocab_list_label = Label(root, text="", font=("Helvetica", 20))
+
+hint_label = Label(root, text=vocab_list_labels[current_index], font=("Helvetica", 20))
 hint_label.pack(pady=5)
 
 # troubleshoot_label = Label(root, text = print(str(hint_count)), font=("Helvetica", 20))
