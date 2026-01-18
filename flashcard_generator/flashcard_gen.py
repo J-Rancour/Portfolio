@@ -224,9 +224,18 @@ def next_vocab_list():
     # print("Vocabl list length after changing vocab is", count)
     # print("Current vocab list index after changing vocab is", current_index)
     next()
-    
-def show_vocab():
-    show_vocab_label.config(text = "test")
+active = False
+def show_vocab_list():
+    global active
+
+    if active == False:
+        show_vocab_label.config(text = show_vocab_label.config(text = current_vocab_list) )
+        active = True
+        
+    else:
+        show_vocab_label.config(text = "")
+        active = False
+        
     
     
 foreign_word = Label(root, text="", font=("Helvetica", 36))
@@ -256,7 +265,7 @@ hint_button.grid(row=0, column=2, padx=10)
 next_vocab_button = Button(button_frame, text="Next Vocab List", command = next_vocab_list)
 next_vocab_button.grid(row=1, column= 0, padx=20)
 
-show_vocab_button = Button(button_frame, text = "Show Vocab List", command = show_vocab)
+show_vocab_button = Button(button_frame, text = "Show Vocab List", command = show_vocab_list)
 show_vocab_button.grid(row=1, column=2, padx = 20)
 
 vocab_list_label = Label(root, text=vocab_list_labels[current_index], font=("Helvetica", 20))
@@ -274,3 +283,5 @@ show_vocab_label.pack(side="right", anchor = "n", padx = 40, pady = 30)
 
 next()
 root.mainloop()
+
+
