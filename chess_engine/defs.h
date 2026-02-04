@@ -5,6 +5,7 @@ typedef unsigned long long U64;
 
 #define NAME "Vice 1.0"
 #define BRD_SQ_NUM 120
+#define MAXGAMEMOVES 2048
 
 //label for what is within a grid square
 enum {EMPTY, wP, wN, wB, wR, wQ, wK, bP, bN, bB, bR, bQ, bK };
@@ -33,11 +34,20 @@ enum{ FALSE, TRUE};
 // ints representing the castling motion
 // 4 bits will tell us if we can still castle on a certain side or team
 //for example, the black king is put in check but the white king and rooks remain unmoved so the array will look like
-// 1 2 0 0
+// 1 1 0 0
 //if no check occurred then it would be this
-// 1 2 4 8
+// 1 1 1 1
 
 enum{ WKCA = 1, WQCA = 2, BKCA = 4, BQCA = 8}
+
+typedef struct {
+    int move;
+    int castlePerm;
+    int enPas;
+    int fiftyMove;
+    U64 posKey;
+
+} S_UNDO;
 
 typedef struct {
     // a list of integers that tells whats on the board. it will 120 integers
@@ -72,6 +82,9 @@ typedef struct {
     int majPce[3];
     //Number of Bishops and Knights
     int minPce[3];
+
+    // stores last move for the undo function
+    S_UNDO history[MAXGAMEMOVES];
 
 } S_BOARD; 
 #endif
