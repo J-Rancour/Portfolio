@@ -1,5 +1,8 @@
 Projects currently working on or worked on
 * Chess Engine
+[To properly compile on windows
+Install MinGW (Install the mingw32-base and the mingw32-gcc-g++ packages. Then set MinGW/bin to env Path), this allows you to run gcc function for compile in make
+Install Chocolatey Package Manager (Follow terminal instructions to properly install. Then run Choco install make. Choco should auto add to path but double check)]
   - Full dive introduction into C language
   - First checkpoint will be a functional board for the player
 * Educational Prompt Creator
