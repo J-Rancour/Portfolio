@@ -34,19 +34,37 @@ int main() {
 
     //Example of adding a pawn to D2 and G2 printed compared to empty board
     //Note the D2 pawn has not been removed when adding and printing G2.
+    //Uncomment prints to see such
     U64 playBitBoard = 0ULL;
 
-    printf("Start:\n\n");
-    PrintBitBoard(playBitBoard);
+    // printf("Start:\n\n");
+    // PrintBitBoard(playBitBoard);
 
     playBitBoard |= (1ULL << SQ64(D2));
+    playBitBoard |= (1ULL << SQ64(D3));
+    playBitBoard |= (1ULL << SQ64(D4));
 
-    printf("D2 Added: \n\n");
+    printf("\n");
     PrintBitBoard(playBitBoard);
 
-    playBitBoard |= (1ULL << SQ64(G2));
-    printf("G2 Added:\n\n");
+    int count = CNT(playBitBoard);
+
+    printf("Count:%d\n", count);
+
+    // printf("D2 Added: \n\n");
+    // PrintBitBoard(playBitBoard);
+
+    //playBitBoard |= (1ULL << SQ64(G2));
+    // printf("G2 Added:\n\n");
+    // PrintBitBoard(playBitBoard);
+
+    int index = POP(&playBitBoard);
+    printf("index:%d\n", index);
     PrintBitBoard(playBitBoard);
+    count = CNT(playBitBoard);
+    printf("Count:%d\n", count);
+    
+
 
     return 0;
 }
