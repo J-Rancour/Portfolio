@@ -1,6 +1,27 @@
 #ifndef DEFS_H
 #define DEFS_H
 
+#include "stdlib.h"
+#define DEBUG
+
+//if debug isnt defined
+//define a macro called ASSERT with argument n but do not do anything
+//comment this line when project is fully complete to allow for ideal runtime
+#ifndef DEBUG
+#define ASSERT(n)
+#else
+// Does same thing but if n is false
+// prints the screen with the date, time, file and line error
+#define ASSERT(n) \
+if(!(n)) { \
+printf("%s - Failed", #n); \
+printf("On %s ", __DATE__); \
+printf("At %s ",__TIME__); \
+printf("In File %s", __FILE__); \
+printf("At Line %d\n", __LINE__); \
+exit (1);}
+#endif
+
 typedef unsigned long long U64;
 
 #define NAME "Vice 1.0"
@@ -86,12 +107,21 @@ typedef struct {
     // stores last move for the undo function
     S_UNDO history[MAXGAMEMOVES];
 
+    // piece list
+    //13 for each piece type
+    // can be up to 10 pieces of one type at one time
+    int pList[13][10];
+
+    // pList [wN] [0] = E1; adds a knight to E1
+    // pList [wN] [1] = D4;... ... another knight added to D4 and so on 
+
 } S_BOARD; 
 
 /* MACROS */
 
 // When given the file and rank number, it will return the square from the 120 square array
 #define FR2SQ(f,r) ( (21 + (f) )  + ( (r) * 10 ) )
+#define SQ64(sq120) Sq120ToSq64[sq120]
 
 /* GLOBALS */
 extern int Sq120ToSq64[BRD_SQ_NUM];
@@ -99,7 +129,12 @@ extern int Sq64ToSq120[64];
 
 /* FUNCTIONS */
 
-extern void AllInit();
 //init.c
+extern void AllInit();
+
+//bitboards.c
+extern void PrintBitBoard(U64 bb);
+
+
 
 #endif

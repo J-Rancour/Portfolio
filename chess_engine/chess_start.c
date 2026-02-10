@@ -10,21 +10,43 @@ int main() {
 
     AllInit();
 
-    int index = 0;
+    //example of using ASSERT for reference
+    // int num = 2;
+    // int nuts = 4;
+
+    // ASSERT(num==nuts);
     
-    for(index = 0; index < BRD_SQ_NUM; ++index) {
-        if(index%10==0) printf("\n");
-        printf("%5d", Sq120ToSq64[index]);
-    }
+    //prints the board in the 120 based index and then in the 64 based index for representation of bits in each board
+    // int index = 0;
+    
+    // for(index = 0; index < BRD_SQ_NUM; ++index) {
+    //     if(index%10==0) printf("\n");
+    //     printf("%5d", Sq120ToSq64[index]);
+    // }
 
-    printf("\n");
-    printf("\n");
-    for(index = 0; index < 64; ++index) {
-        if(index%8==0) printf("\n");
-        //print each number within 5 character widths
-        printf("%5d", Sq64ToSq120[index]);
-    }
+    // printf("\n");
+    // printf("\n");
+    // for(index = 0; index < 64; ++index) {
+    //     if(index%8==0) printf("\n");
+    //     //print each number within 5 character widths
+    //     printf("%5d", Sq64ToSq120[index]);
+    // }
 
+    //Example of adding a pawn to D2 and G2 printed compared to empty board
+    //Note the D2 pawn has not been removed when adding and printing G2.
+    U64 playBitBoard = 0ULL;
+
+    printf("Start:\n\n");
+    PrintBitBoard(playBitBoard);
+
+    playBitBoard |= (1ULL << SQ64(D2));
+
+    printf("D2 Added: \n\n");
+    PrintBitBoard(playBitBoard);
+
+    playBitBoard |= (1ULL << SQ64(G2));
+    printf("G2 Added:\n\n");
+    PrintBitBoard(playBitBoard);
 
     return 0;
 }
