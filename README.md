@@ -18,3 +18,8 @@ Install Chocolatey Package Manager (Follow terminal instructions to properly ins
   - Will give options between multiple vocab list
   - Hint preview for each flashcard will include the romanji characters beneath the phrase given to help learning transition
   - OCR will eventually be implemented to find vocab sets from japanese pdfs to enable auto generation of vocab list rather than manually putting them in
+* Portfolio Website
+  - Multi-page website that will display completed projects and skills
+  - Ideally have it connect to other websites that I develop. (Planning on doing chess.com copy as practice after building the engine)
+  - Will also have live data displays for stuff I develop eventually. (Most likely Fintech, it's what I know best. But I would love to pivot into physics based or bio based subjects in my own time.)
+  - In the future, learn how to properly implement cybersecurity protocols on the website. It may not contain any private info but showcasing those skills would be nice

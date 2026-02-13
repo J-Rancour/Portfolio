@@ -35,21 +35,21 @@ int main() {
     //Example of adding a pawn to D2 and G2 printed compared to empty board
     //Note the D2 pawn has not been removed when adding and printing G2.
     //Uncomment prints to see such
-    U64 playBitBoard = 0ULL;
+    // U64 playBitBoard = 0ULL;
 
     // printf("Start:\n\n");
     // PrintBitBoard(playBitBoard);
 
-    playBitBoard |= (1ULL << SQ64(D2));
-    playBitBoard |= (1ULL << SQ64(D3));
-    playBitBoard |= (1ULL << SQ64(D4));
+    // playBitBoard |= (1ULL << SQ64(D2));
+    // playBitBoard |= (1ULL << SQ64(D3));
+    // playBitBoard |= (1ULL << SQ64(D4));
 
-    printf("\n");
-    PrintBitBoard(playBitBoard);
+    // printf("\n");
+    // PrintBitBoard(playBitBoard);
 
-    int count = CNT(playBitBoard);
+    // int count = CNT(playBitBoard);
 
-    printf("Count:%d\n", count);
+    // printf("Count:%d\n", count);
 
     // printf("D2 Added: \n\n");
     // PrintBitBoard(playBitBoard);
@@ -58,11 +58,28 @@ int main() {
     // printf("G2 Added:\n\n");
     // PrintBitBoard(playBitBoard);
 
-    int index = POP(&playBitBoard);
-    printf("index:%d\n", index);
-    PrintBitBoard(playBitBoard);
-    count = CNT(playBitBoard);
-    printf("Count:%d\n", count);
+    // int index = POP(&playBitBoard);
+    // printf("index:%d\n", index);
+    // PrintBitBoard(playBitBoard);
+    // count = CNT(playBitBoard);
+    // printf("Count:%d\n", count);
+
+    int PieceOne = rand();
+    int PieceTwo = rand();
+    int PieceThree = rand();
+    int PieceFour = rand();
+
+    printf("PieceOne:%X\n", PieceOne);
+    printf("PieceTwo:%X\n", PieceTwo);
+    printf("PieceThree:%X\n", PieceThree);
+    printf("PieceFour:%X\n", PieceFour);
+
+    int Key = PieceOne ^ PieceTwo ^ PieceThree ^ PieceFour;
+    int TempKey = PieceOne;
+    TempKey ^= PieceTwo;
+    TempKey ^= PieceThree;
+    TempKey ^= PieceFour;
+
     
 
 
