@@ -1,0 +1,103 @@
+# CI/CD for the tutorial API.
+#
+# NOTE: GitHub only runs workflows from .github/workflows at the REPOSITORY ROOT.
+# This file assumes api_practice/ is the repo root. If it stays inside a bigger
+# repo, move this file to <root>/.github/workflows/ and add
+#     defaults: { run: { working-directory: api_practice } }
+# at the top level (and prefix the docker build context with api_practice/).
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # CI: build + test on both operating systems the job targets.
+  test:
+    strategy:
+      fail-fast: false          # let the other OS finish so you see every failure
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Build C++ core and run C++ tests
+        run: |
+          cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --config Release
+          ctest --test-dir native/build -C Release --output-on-failure
+
+      - name: Install Python deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit + integration tests
+        run: pytest -q
+
+      - name: Fail if the C++ core didn't load (silent fallback would hide a broken build)
+        run: python -c "from app import wxcore; assert wxcore.ENGINE == 'cpp', 'C++ core did not load'"
+
+  # Build the image and smoke-test the real container, the way it will run in prod.
+  container:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: docker build -t wx-api:${{ github.sha }} .
+      - name: Smoke test
+        run: |
+          docker run -d -p 8000:8000 --name wx wx-api:${{ github.sha }}
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8000/health && break; sleep 1; done
+          pip install -r requirements-dev.txt
+          python cli.py check 1 2 3 5 8 9
+      - if: failure()
+        run: docker logs wx
+
+  # CD: only on main, and only once AWS is configured (repo variable AWS_DEPLOY=true).
+  # Uses GitHub OIDC to assume an IAM role, so no long-lived AWS keys live in GitHub.
+  deploy:
+    needs: container
+    if: github.ref == 'refs/heads/main' && vars.AWS_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: production     # can require a manual approval in repo settings
+    permissions:
+      id-token: write           # needed for OIDC
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/wx-api:${{ github.sha }}
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: deploy/task-definition.json
+          container-name: wx-api
+          image: ${{ env.IMAGE }}
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: ${{ vars.ECS_SERVICE }}
+          wait-for-service-stability: true   # the ALB health checks gate the rollout

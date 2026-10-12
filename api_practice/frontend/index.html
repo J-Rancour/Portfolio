@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather API Tutorial</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">&#9992;</span>
+      <div>
+        <h1>Weather API Tutorial</h1>
+        <p class="sub">Build and verify a REST API, step by step</p>
+      </div>
+    </div>
+    <form id="settings" class="settings" autocomplete="off">
+      <label>API base URL <input id="baseUrl" spellcheck="false"></label>
+      <label>Read-write key <input id="rwKey" spellcheck="false"></label>
+      <label>Read-only key <input id="roKey" spellcheck="false"></label>
+      <div class="health" id="health" title="GET /health every 5 s">
+        <span class="dot"></span><span id="healthText">checking...</span>
+      </div>
+      <a id="docsLink" class="docs" target="_blank" rel="noopener">OpenAPI docs</a>
+    </form>
+  </header>
+
+  <div class="layout">
+    <nav class="steps" aria-label="Tutorial steps">
+      <div class="steps-head">
+        <span>Steps</span>
+        <button id="runAll" class="btn small">Run all</button>
+      </div>
+      <ol id="stepList"></ol>
+      <button id="resetProgress" class="link">Reset progress</button>
+    </nav>
+
+    <main>
+      <section id="stepView" class="card"></section>
+
+      <section class="card tools">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="console" class="active">Request console</button>
+          <button role="tab" data-tab="feed">Live feed (WebSocket)</button>
+          <button role="tab" data-tab="data">Observations</button>
+        </div>
+
+        <div class="tab-panel" id="tab-console">
+          <form id="consoleForm" class="console-form">
+            <div class="row">
+              <select id="cMethod">
+                <option>GET</option><option>POST</option><option>PATCH</option><option>PUT</option><option>DELETE</option>
+              </select>
+              <input id="cPath" value="/api/v1/observations?limit=5" spellcheck="false" aria-label="Path">
+              <select id="cAuth" aria-label="API key to send">
+                <option value="rw">read-write key</option>
+                <option value="ro">read-only key</option>
+                <option value="bad">made-up key</option>
+                <option value="none">no key</option>
+              </select>
+              <button class="btn primary" type="submit">Send</button>
+            </div>
+            <div class="row presets">
+              <span class="muted">Presets:</span>
+              <button type="button" class="chip" data-preset="health">GET /health</button>
+              <button type="button" class="chip" data-preset="create">POST observation</button>
+              <button type="button" class="chip" data-preset="invalid">POST invalid</button>
+              <button type="button" class="chip" data-preset="category">Flight category</button>
+              <button type="button" class="chip" data-preset="wind">Wind components</button>
+              <button type="button" class="chip" data-preset="metrics">GET /metrics</button>
+            </div>
+            <label class="stack">Extra headers (one "Name: value" per line)
+              <textarea id="cHeaders" rows="2" spellcheck="false" placeholder="X-Request-ID: my-debug-id"></textarea>
+            </label>
+            <label class="stack">JSON body
+              <textarea id="cBody" rows="7" spellcheck="false"></textarea>
+            </label>
+          </form>
+          <div id="cResponse" class="response empty">Send a request to see the status, headers and body.</div>
+        </div>
+
+        <div class="tab-panel" id="tab-feed" hidden>
+          <div class="row">
+            <button id="wsToggle" class="btn primary">Connect</button>
+            <button id="wsPing" class="btn" disabled>Send ping</button>
+            <button id="wsClear" class="btn">Clear</button>
+            <span id="wsState" class="muted">disconnected</span>
+          </div>
+          <p class="muted">Connect, then create an observation (console preset or <code>python cli.py seed</code>) and watch it arrive without polling.</p>
+          <ol id="wsLog" class="ws-log"></ol>
+        </div>
+
+        <div class="tab-panel" id="tab-data" hidden>
+          <form id="dataForm" class="row">
+            <input id="dStation" placeholder="Station (e.g. KJFK)" maxlength="4" spellcheck="false">
+            <button class="btn primary" type="submit">Load</button>
+            <button class="btn" type="button" id="dPrev">&larr; Prev</button>
+            <button class="btn" type="button" id="dNext">Next &rarr;</button>
+            <span id="dInfo" class="muted"></span>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Station</th><th>Observed (UTC)</th><th>Temp/Dew &deg;C</th><th>Wind</th><th>Vis sm</th><th>Ceiling ft</th><th>Category</th><th></th></tr></thead>
+              <tbody id="dRows"><tr><td colspan="8" class="muted">Press Load.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
