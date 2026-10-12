@@ -9,3 +9,5 @@ service_account.json
 *.pyc
 *.venv
 *.pdf
+
+*.pdf
