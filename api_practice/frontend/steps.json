@@ -1,0 +1,413 @@
+{
+  "templates": {
+    "obs": {
+      "station": "{station}",
+      "observed_at": "2026-10-11T18:51:00Z",
+      "temperature_c": 18,
+      "dewpoint_c": 10,
+      "wind_dir_deg": 270,
+      "wind_speed_kt": 12,
+      "visibility_sm": 10
+    }
+  },
+  "steps": [
+    {
+      "id": 1,
+      "title": "Skeleton & health check",
+      "goal": "A running FastAPI app with GET /health returning JSON.",
+      "concepts": [
+        "ASGI server (uvicorn) vs framework (FastAPI): the server speaks HTTP, the framework routes requests to your functions.",
+        "A health endpoint is what load balancers, ECS and Kubernetes poll. Keep it cheap: no database calls.",
+        "FastAPI generates OpenAPI docs for free at /docs (Swagger UI) and /openapi.json.",
+        "App factory pattern (create_app) so tests can build isolated instances."
+      ],
+      "files": ["app/main.py", "app/routes.py (health)"],
+      "checks": [
+        {
+          "name": "GET /health returns 200 {status: ok}",
+          "request": { "method": "GET", "path": "/health" },
+          "expect": { "status": 200, "json_equals": { "status": "ok" }, "json_has": ["time"] }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "CRUD on a resource",
+      "goal": "Create, read, list, partially update and delete observations, with correct status codes.",
+      "concepts": [
+        "Resources are nouns (/observations); HTTP methods are the verbs.",
+        "POST creates -> 201 Created + Location header pointing at the new resource.",
+        "PATCH changes some fields; PUT replaces the whole resource. PUT and DELETE are idempotent, POST is not.",
+        "DELETE -> 204 No Content (empty body). Reading it afterwards -> 404.",
+        "Document store: each observation is one JSON document (TinyDB here; MongoDB/DynamoDB in production)."
+      ],
+      "files": ["app/models.py", "app/storage.py", "app/routes.py"],
+      "checks": [
+        {
+          "name": "POST creates an observation (201 + Location)",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs" } },
+          "expect": { "status": 201, "headers": ["location"], "json_has": ["id"], "json_equals": { "station": "{station}" } },
+          "save": { "obs_id": "json:id", "location": "header:location" }
+        },
+        {
+          "name": "GET the Location URL returns it",
+          "request": { "method": "GET", "path": "{location}" },
+          "expect": { "status": 200, "json_equals": { "id": "{obs_id}" } }
+        },
+        {
+          "name": "GET list filtered by station finds exactly 1",
+          "request": { "method": "GET", "path": "/api/v1/observations?station={station}" },
+          "expect": { "status": 200, "json_equals": { "total": 1 }, "json_len": { "items": 1 } }
+        },
+        {
+          "name": "PATCH changes only the sent field",
+          "request": { "method": "PATCH", "path": "/api/v1/observations/{obs_id}", "json": { "temperature_c": 25.5 } },
+          "expect": { "status": 200, "json_equals": { "temperature_c": 25.5, "station": "{station}", "wind_speed_kt": 12 } }
+        },
+        {
+          "name": "DELETE returns 204",
+          "request": { "method": "DELETE", "path": "/api/v1/observations/{obs_id}" },
+          "expect": { "status": 204 }
+        },
+        {
+          "name": "GET after DELETE returns 404",
+          "request": { "method": "GET", "path": "/api/v1/observations/{obs_id}" },
+          "expect": { "status": 404 }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Validation & consistent errors",
+      "goal": "Reject bad input with 422, missing things with 404, duplicates with 409, all in one error shape.",
+      "concepts": [
+        "Validate at the edge: Pydantic models declare types, ranges and patterns once.",
+        "400 malformed request, 404 not found, 409 conflicts with current state, 422 well-formed but invalid.",
+        "One error envelope {error: {code, message, details}} so clients parse one format.",
+        "Never return stack traces to clients; log them server-side instead."
+      ],
+      "files": ["app/models.py", "app/errors.py"],
+      "checks": [
+        {
+          "name": "Invalid body -> 422 with field details",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "station": "NOPE1" } },
+          "expect": { "status": 422, "json_equals": { "error.code": "validation_error" }, "json_has": ["error.details.0.field"] }
+        },
+        {
+          "name": "Out-of-range value (wind 400 deg) -> 422",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "wind_dir_deg": 400 } },
+          "expect": { "status": 422 }
+        },
+        {
+          "name": "Dewpoint above temperature -> 422 (cross-field rule)",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "dewpoint_c": 25 } },
+          "expect": { "status": 422 }
+        },
+        {
+          "name": "Unknown id -> 404 in the error envelope",
+          "request": { "method": "GET", "path": "/api/v1/observations/does-not-exist" },
+          "expect": { "status": 404, "json_equals": { "error.code": "not_found" }, "json_has": ["error.message"] }
+        },
+        {
+          "name": "First report for station+time -> 201",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs" } },
+          "expect": { "status": 201 }
+        },
+        {
+          "name": "Same station+time again -> 409 Conflict",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs" } },
+          "expect": { "status": 409, "json_equals": { "error.code": "conflict" } }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Filtering & pagination",
+      "goal": "List endpoints that never return unbounded results.",
+      "concepts": [
+        "Query parameters filter and page a collection: ?station=KJFK&since=...&limit=20&offset=40.",
+        "Always cap limit (here 100). An unbounded list endpoint is an outage waiting to happen.",
+        "Offset paging is simple but slow on deep pages and shifts when rows are inserted; cursor (keyset) paging fixes both.",
+        "Return paging metadata (total, limit, offset) with the items."
+      ],
+      "files": ["app/routes.py (list_observations)", "app/storage.py (list)"],
+      "checks": [
+        {
+          "name": "Seed report 12:00Z",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "observed_at": "2026-10-11T12:00:00Z" } },
+          "expect": { "status": 201 }
+        },
+        {
+          "name": "Seed report 13:00Z",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "observed_at": "2026-10-11T13:00:00Z" } },
+          "expect": { "status": 201 }
+        },
+        {
+          "name": "Seed report 14:00Z",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "observed_at": "2026-10-11T14:00:00Z" } },
+          "expect": { "status": 201 }
+        },
+        {
+          "name": "Page 1 (limit=2): newest first, total=3",
+          "request": { "method": "GET", "path": "/api/v1/observations?station={station}&limit=2" },
+          "expect": { "status": 200, "json_equals": { "total": 3, "limit": 2, "items.0.observed_at": "2026-10-11T14:00:00Z" }, "json_len": { "items": 2 } }
+        },
+        {
+          "name": "Page 2 (offset=2) has the last one",
+          "request": { "method": "GET", "path": "/api/v1/observations?station={station}&limit=2&offset=2" },
+          "expect": { "status": 200, "json_len": { "items": 1 }, "json_equals": { "items.0.observed_at": "2026-10-11T12:00:00Z" } }
+        },
+        {
+          "name": "since= filters by time",
+          "request": { "method": "GET", "path": "/api/v1/observations?station={station}&since=2026-10-11T13:00:00Z" },
+          "expect": { "status": 200, "json_equals": { "total": 2 } }
+        },
+        {
+          "name": "limit=500 is rejected (cap is 100)",
+          "request": { "method": "GET", "path": "/api/v1/observations?limit=500" },
+          "expect": { "status": 422 }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Authentication & authorization",
+      "goal": "API keys in the X-API-Key header; reads are public, writes need a read-write key.",
+      "concepts": [
+        "401 = who are you? (missing/invalid credentials). 403 = I know you, and you're not allowed.",
+        "A 401 should carry a WWW-Authenticate header naming the scheme.",
+        "Compare secrets with secrets.compare_digest (constant time).",
+        "Keys only travel safely over HTTPS (step 10). In production: keys in AWS Secrets Manager, or OAuth2/JWT, or API Gateway + Cognito/IAM."
+      ],
+      "files": ["app/security.py", "app/config.py"],
+      "checks": [
+        {
+          "name": "POST without a key -> 401 + WWW-Authenticate",
+          "request": { "method": "POST", "path": "/api/v1/observations", "auth": "none", "json": { "$template": "obs" } },
+          "expect": { "status": 401, "headers": ["www-authenticate"], "json_equals": { "error.code": "unauthorized" } }
+        },
+        {
+          "name": "POST with a made-up key -> 401",
+          "request": { "method": "POST", "path": "/api/v1/observations", "auth": "bad", "json": { "$template": "obs" } },
+          "expect": { "status": 401 }
+        },
+        {
+          "name": "POST with a read-only key -> 403",
+          "request": { "method": "POST", "path": "/api/v1/observations", "auth": "ro", "json": { "$template": "obs" } },
+          "expect": { "status": 403, "json_equals": { "error.code": "forbidden" } }
+        },
+        {
+          "name": "GET without a key is allowed (public reads)",
+          "request": { "method": "GET", "path": "/api/v1/observations?limit=1", "auth": "none" },
+          "expect": { "status": 200 }
+        },
+        {
+          "name": "POST with the read-write key -> 201",
+          "request": { "method": "POST", "path": "/api/v1/observations", "auth": "rw", "json": { "$template": "obs" } },
+          "expect": { "status": 201 },
+          "save": { "obs_id": "json:id" }
+        },
+        {
+          "name": "DELETE with a read-only key -> 403",
+          "request": { "method": "DELETE", "path": "/api/v1/observations/{obs_id}", "auth": "ro" },
+          "expect": { "status": 403 }
+        },
+        {
+          "name": "DELETE with the read-write key -> 204",
+          "request": { "method": "DELETE", "path": "/api/v1/observations/{obs_id}", "auth": "rw" },
+          "expect": { "status": 204 }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Rate limiting",
+      "goal": "Token-bucket limits per API key (generous) and per IP for anonymous clients (strict).",
+      "concepts": [
+        "Token bucket: capacity = allowed burst, refill rate = sustained requests/second.",
+        "Exceeded -> 429 Too Many Requests + Retry-After (seconds). Well-behaved clients back off with exponential backoff + jitter.",
+        "X-RateLimit-Limit / X-RateLimit-Remaining headers let clients pace themselves.",
+        "Only valid keys get their own bucket; otherwise clients could rotate fake keys to dodge the limit.",
+        "In-memory buckets don't work across several instances: use Redis, or API Gateway usage plans / AWS WAF rate rules."
+      ],
+      "files": ["app/ratelimit.py"],
+      "checks": [
+        {
+          "name": "Responses carry X-RateLimit-* headers",
+          "request": { "method": "GET", "path": "/api/v1/observations?limit=1" },
+          "expect": { "status": 200, "headers": ["x-ratelimit-limit", "x-ratelimit-remaining"] }
+        },
+        {
+          "name": "15 fast anonymous requests hit 429 + Retry-After",
+          "repeat": 15,
+          "request": { "method": "GET", "path": "/api/v1/observations?limit=1", "auth": "none" },
+          "expect": { "status": 429, "headers": ["retry-after"], "json_equals": { "error.code": "rate_limited" } },
+          "cooldown_s": 6,
+          "hint": "Anonymous limit defaults to a burst of 10, refilling 1/s. The check waits a few seconds afterwards so later checks aren't throttled."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "WebSockets (server push)",
+      "goal": "Clients on /ws/observations receive every new observation as it's created.",
+      "concepts": [
+        "A WebSocket starts as an HTTP GET with Upgrade: websocket; the server answers 101 Switching Protocols and the TCP connection stays open, full duplex.",
+        "Use it when the server needs to push (live feeds). Alternatives: polling, long-polling, Server-Sent Events (one-way, plain HTTP).",
+        "ws:// is plain, wss:// is WebSocket over TLS (same certs as HTTPS).",
+        "Handle disconnects: a dead client must not break the broadcast for everyone else.",
+        "Several server instances? Each only knows its own sockets, so fan out through Redis pub/sub, SNS/SQS, or API Gateway WebSocket APIs."
+      ],
+      "files": ["app/ws.py", "app/routes.py (broadcast in create_observation)"],
+      "checks": [
+        {
+          "name": "Creating an observation pushes observation.created to WS clients",
+          "kind": "ws",
+          "path": "/ws/observations",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs" } },
+          "expect": { "json_equals": { "event": "observation.created", "data.station": "{station}" } }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "C++ core via ctypes",
+      "goal": "Flight category and wind components computed by a C++ shared library called from Python.",
+      "concepts": [
+        "extern \"C\" turns off C++ name mangling so ctypes can find functions by name.",
+        "Only C types cross the boundary: ints, doubles, char*, pointers. No std::string, no exceptions.",
+        "Always set argtypes/restype in ctypes. Without them, floats raise ArgumentError, ints are passed where C expects doubles (garbage results), and returned pointers are truncated to ints.",
+        "Out-parameters: pass ctypes.byref(c_double()) and C writes into it.",
+        "The library's bitness/ABI must match Python: 64-bit Python can't load a 32-bit DLL (WinError 193).",
+        "Alternatives: pybind11 / nanobind (C++ classes, exceptions), Cython, CFFI, or a separate process."
+      ],
+      "files": ["native/wxcore.h", "native/wxcore.cpp", "native/CMakeLists.txt", "app/wxcore.py"],
+      "checks": [
+        {
+          "name": "Server reports engine=cpp (library loaded)",
+          "request": { "method": "GET", "path": "/health" },
+          "expect": { "status": 200, "json_equals": { "engine": "cpp" } },
+          "hint": "Build the library (native\\build.bat on Windows, native/build.sh on Linux/macOS) and restart uvicorn. The server log says why it fell back to Python."
+        },
+        {
+          "name": "10sm, no ceiling -> VFR",
+          "request": { "method": "GET", "path": "/api/v1/tools/flight-category?visibility_sm=10" },
+          "expect": { "status": 200, "json_equals": { "category": "VFR" } }
+        },
+        {
+          "name": "4sm -> MVFR",
+          "request": { "method": "GET", "path": "/api/v1/tools/flight-category?visibility_sm=4" },
+          "expect": { "status": 200, "json_equals": { "category": "MVFR" } }
+        },
+        {
+          "name": "ceiling 800ft -> IFR",
+          "request": { "method": "GET", "path": "/api/v1/tools/flight-category?visibility_sm=10&ceiling_ft=800" },
+          "expect": { "status": 200, "json_equals": { "category": "IFR" } }
+        },
+        {
+          "name": "1/2sm -> LIFR",
+          "request": { "method": "GET", "path": "/api/v1/tools/flight-category?visibility_sm=0.5&ceiling_ft=5000" },
+          "expect": { "status": 200, "json_equals": { "category": "LIFR" } }
+        },
+        {
+          "name": "Wind 270@20 on runway 240: 17.3kt head, 10kt cross",
+          "request": { "method": "GET", "path": "/api/v1/tools/wind-components?wind_dir=270&wind_speed=20&runway_heading=240" },
+          "expect": { "status": 200, "json_approx": { "headwind_kt": [17.3, 0.1], "crosswind_kt": [10.0, 0.1] } }
+        },
+        {
+          "name": "Observations include flight_category (2sm -> IFR)",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs", "visibility_sm": 2 } },
+          "expect": { "status": 201, "json_equals": { "flight_category": "IFR" } }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Observability",
+      "goal": "Every request gets an ID, a timing header and one structured log line; /metrics shows counters.",
+      "concepts": [
+        "Request IDs connect a client's error report to your server logs. Reuse an incoming X-Request-ID so the ID spans services.",
+        "Structured (JSON) logs are queryable in CloudWatch Logs Insights / ELK, e.g. filter status >= 500.",
+        "The three pillars: logs (what happened), metrics (how much / how fast), traces (where time went across services).",
+        "Middleware order matters: observability wraps rate limiting, so even 429s get IDs and log lines."
+      ],
+      "files": ["app/observability.py", "app/main.py (middleware order)"],
+      "checks": [
+        {
+          "name": "Incoming X-Request-ID is echoed back",
+          "request": { "method": "GET", "path": "/health", "headers": { "X-Request-ID": "tutorial-check-123" } },
+          "expect": { "status": 200, "header_equals": { "x-request-id": "tutorial-check-123" }, "headers": ["x-process-time-ms"] }
+        },
+        {
+          "name": "Error bodies include the request_id",
+          "request": { "method": "GET", "path": "/api/v1/observations/nope" },
+          "expect": { "status": 404, "json_has": ["request_id"] }
+        },
+        {
+          "name": "GET /metrics returns counters",
+          "request": { "method": "GET", "path": "/metrics" },
+          "expect": { "status": 200, "json_has": ["requests_total", "by_status"] }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "HTTPS & WSS",
+      "goal": "Serve the same app over TLS with a self-signed certificate.",
+      "concepts": [
+        "TLS gives confidentiality, integrity and server identity. HTTPS = HTTP over TLS; WSS = WebSocket over TLS.",
+        "The client checks the cert chains to a trusted CA and matches the hostname (SAN). Self-signed certs fail that unless you trust them explicitly.",
+        "verify=False 'fixes' errors by turning off the protection. Pass the cert as a CA file instead.",
+        "In AWS you usually terminate TLS at the load balancer (ALB + ACM certificate) or API Gateway, not in uvicorn."
+      ],
+      "files": ["scripts/make_cert.py"],
+      "checks": [
+        {
+          "name": "GET /health over https://",
+          "require_scheme": "https",
+          "request": { "method": "GET", "path": "/health" },
+          "expect": { "status": 200 },
+          "hint": "python scripts/make_cert.py, then: uvicorn app.main:app --port 8443 --ssl-keyfile certs/key.pem --ssl-certfile certs/cert.pem, then: python cli.py --base-url https://127.0.0.1:8443 --cafile certs/cert.pem check 10"
+        },
+        {
+          "name": "WebSocket push over wss://",
+          "kind": "ws",
+          "require_scheme": "https",
+          "path": "/ws/observations",
+          "request": { "method": "POST", "path": "/api/v1/observations", "json": { "$template": "obs" } },
+          "expect": { "json_equals": { "event": "observation.created" } }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Automated tests & CI",
+      "goal": "pytest suite + C++ tests + lint, run by GitHub Actions on Linux and Windows for every push.",
+      "concepts": [
+        "Test pyramid: many fast unit tests, fewer integration tests (TestClient hits the real app in-process), few end-to-end.",
+        "Fixtures give each test a fresh app with an in-memory DB: no shared state, order-independent.",
+        "CI = every push builds and tests automatically. CD = passing builds deploy automatically (or with one approval).",
+        "A matrix build (ubuntu + windows) catches platform bugs: paths, line endings, DLL vs .so."
+      ],
+      "files": ["tests/", ".github/workflows/ci.yml", "pyproject.toml"],
+      "checks": [
+        { "name": "pytest passes", "kind": "command", "argv": ["{python}", "-m", "pytest", "-q"] },
+        { "name": "ruff lint passes", "kind": "command", "argv": ["{python}", "-m", "ruff", "check", "."] }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Containerize & deploy (AWS)",
+      "goal": "Docker image + a deployment story you can explain on a whiteboard.",
+      "concepts": [
+        "Dockerfile: multi-stage build compiles the C++ in one stage and copies only the .so into a slim runtime image.",
+        "Container options on AWS: ECS Fargate behind an ALB (long-running, WebSockets OK), or Lambda + API Gateway (bursty, pay-per-request, 15-min limit).",
+        "Data: DynamoDB (key-value/document, partition key = station, sort key = observed_at) or DocumentDB (MongoDB-compatible).",
+        "Pipeline: GitHub Actions -> build image -> push to ECR -> deploy to ECS (rolling or blue/green) -> health checks gate traffic.",
+        "Config via env vars; secrets via Secrets Manager; logs to CloudWatch."
+      ],
+      "files": ["Dockerfile", "TUTORIAL.md (step 12)"],
+      "checks": []
+    }
+  ]
+}

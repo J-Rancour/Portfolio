@@ -1,0 +1,30 @@
+{
+  "family": "wx-api",
+  "requiresCompatibilities": ["FARGATE"],
+  "networkMode": "awsvpc",
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "wx-api",
+      "image": "<filled in by the pipeline>",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "CORS_ORIGINS", "value": "https://wx.example.com" }
+      ],
+      "secrets": [
+        { "name": "API_KEYS", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:wx-api/keys" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/wx-api",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}
