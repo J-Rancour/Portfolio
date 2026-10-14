@@ -28,39 +28,61 @@ rubric at the end. Don't help unless the candidate is completely stuck for 2+ mi
 | 65–72 | **Behavioural** | Two prompts from part 5 |
 | 72–75 | **Candidate questions** | Part 6 |
 
-### Live exercise 1: parse a METAR wind group (20 min)
+### Live exercise 1: parse a duration string (20 min)
 
-> Write `parse_wind(group: str) -> dict` for METAR wind groups. Examples:
-> `"27012KT"` → `{"dir": 270, "speed": 12, "gust": None, "variable": False}`
-> `"27012G20KT"` → gust 20 · `"VRB03KT"` → dir None, variable True · `"00000KT"` → calm.
-> Invalid input should raise `ValueError`. Then: what tests would you write?
+> Write `parse_duration(text: str) -> int` that turns a duration like `"1h30m"` into a total
+> number of seconds. Invalid input should raise `ValueError`. Then: what tests would you write?
+>
+> **Format:** one or more parts, each a number followed by a unit letter, with no spaces.
+>
+> | Part | Unit letter | Number | Allowed values | Required? |
+> |---|---|---|---|---|
+> | Hours | `h` | 1–2 digits | 0–99 | No |
+> | Minutes | `m` | 1–2 digits | 0–59 | No |
+> | Seconds | `s` | 1–2 digits | 0–59 | No |
+>
+> **Rules:**
+> - At least one part must be present.
+> - Parts appear in the order `h`, `m`, `s`, and each appears at most once.
+> - Unit letters are lowercase. Only whole numbers (no signs or decimals).
+>
+> **Examples:**
+>
+> | Input | Output | Why |
+> |---|---|---|
+> | `"1h30m"` | `5400` | 3600 + 1800 |
+> | `"45s"` | `45` | |
+> | `"2h5m10s"` | `7510` | 7200 + 300 + 10 |
+> | `"0s"` | `0` | Zero is allowed |
+> | `""` | `ValueError` | No parts |
+> | `"90"` | `ValueError` | Number with no unit |
+> | `"30m1h"` | `ValueError` | Wrong order |
+> | `"1h1h"` | `ValueError` | Repeated unit |
+> | `"75m"` | `ValueError` | Minutes out of range |
+> | `"1d"`, `"1.5h"`, `"-5m"`, `"1h 30m"` | `ValueError` | Unknown unit, decimal, sign, space |
 
 <details><summary>Reference solution</summary>
 
 ```python
 import re
 
-WIND = re.compile(r"^(?P<dir>\d{3}|VRB)(?P<speed>\d{2,3})(?:G(?P<gust>\d{2,3}))?KT$")
+DURATION = re.compile(r"(?:(?P<h>\d{1,2})h)?(?:(?P<m>\d{1,2})m)?(?:(?P<s>\d{1,2})s)?")
 
-def parse_wind(group: str) -> dict:
-    m = WIND.match(group.strip().upper())
-    if not m:
-        raise ValueError(f"not a wind group: {group!r}")
-    variable = m["dir"] == "VRB"
-    direction = None if variable else int(m["dir"])
-    if direction is not None and direction > 360:
-        raise ValueError(f"direction out of range: {direction}")
-    return {
-        "dir": direction,
-        "speed": int(m["speed"]),
-        "gust": int(m["gust"]) if m["gust"] else None,
-        "variable": variable,
-    }
+def parse_duration(text: str) -> int:
+    match = DURATION.fullmatch(text)
+    if not text or not match:  # every part is optional, so "" would match the pattern
+        raise ValueError(f"not a duration: {text!r}")
+    hours, minutes, seconds = (int(match[unit] or 0) for unit in "hms")
+    if minutes > 59 or seconds > 59:
+        raise ValueError(f"out of range: {text!r}")
+    return hours * 3600 + minutes * 60 + seconds
 ```
 
-Tests: each example above; 3-digit speeds (`250105KT`); lowercase input; garbage (`""`,
-`"27012"`, `"ABC12KT"`, `"40012KT"`); a gust lower than the speed (should that be rejected?
-**Ask the interviewer.** Asking about requirements scores points). Mention `pytest.mark.parametrize`.
+Tests: each row of the examples table; the boundaries (`"59m"` passes, `"60m"` fails; `"99h"`
+passes, `"100h"` fails); a trailing newline (`"1h\n"`: `fullmatch` rejects it, but `re.match`
+with `$` would accept it). Good clarifying question: should `"90m"` be accepted instead of forcing
+`"1h30m"`? The spec says no, but **asking about requirements scores points**. Mention
+`pytest.mark.parametrize`.
 </details>
 
 ### Live exercise 2: add an endpoint (20 min, in this repo)
